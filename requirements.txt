@@ -1,0 +1,26 @@
+# Core web framework
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# PDF processing
+PyMuPDF
+
+# ML / NLP
+scikit-learn
+sentence-transformers
+transformers
+torch
+
+# OCR (optional — only needed for scanned PDFs)
+pytesseract
+pdf2image
+Pillow
+
+# Utilities
+numpy
+
+datasets
+accelerate
+evaluate
