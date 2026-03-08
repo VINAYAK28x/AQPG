@@ -70,8 +70,8 @@ The first time you run the FastAPI backend and trigger Semantic Mapping or Quest
 **Manual/Offline Setup:**
 If you need the system to be completely air-gapped without internet access:
 1. Download `all-MiniLM-L6-v2` and `flan-t5-base` manually on a separate machine.
-2. Place the model folders inside `backend/models/`.
-3. Update `backend/app/core/config.py` to point to `./models/flan-t5-base`.
+2. Place the model folders inside the root `models/` directory.
+3. Update `backend/app/core/config.py` to point to `../models/flan-t5-base`.
 
 ### 4. Running the Backend Server
 While inside the `backend` folder with your `venv` activated, start the FastAPI server:
