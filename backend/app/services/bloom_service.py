@@ -3,7 +3,7 @@ Bloom's Taxonomy Classification Service — classify questions by cognitive leve
 
 Responsibilities:
 - Classify a question text into one of 6 Bloom's taxonomy levels
-- Use DistilBERT-based classification if a fine-tuned model is available
+- Use DistilBERT-based classification from the trained model at models/blooms_classifier
 - Fall back to keyword-based heuristic classification otherwise
 
 Bloom's Levels: Remember, Understand, Apply, Analyze, Evaluate, Create
@@ -11,12 +11,23 @@ Bloom's Levels: Remember, Understand, Apply, Analyze, Evaluate, Create
 
 import os
 import logging
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # Bloom's taxonomy levels in order
 BLOOM_LEVELS = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
+
+# Map numeric LABEL_N → Bloom level (fallback if config.json still has generic labels)
+LABEL_INDEX_MAP = {
+    "LABEL_0": "Remember",
+    "LABEL_1": "Understand",
+    "LABEL_2": "Apply",
+    "LABEL_3": "Analyze",
+    "LABEL_4": "Evaluate",
+    "LABEL_5": "Create",
+}
 
 # Keyword heuristics for fallback classification
 BLOOM_KEYWORDS = {
@@ -46,6 +57,10 @@ BLOOM_KEYWORDS = {
     ],
 }
 
+# Auto-discover the model path relative to the project root
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # backend -> AQPG
+_DEFAULT_MODEL_PATH = _PROJECT_ROOT / "models" / "blooms_classifier" / "kaggle" / "working" / "blooms_classifier"
+
 
 class BloomClassifierService:
     """
@@ -57,7 +72,7 @@ class BloomClassifierService:
 
     def __init__(self, model_path: Optional[str] = None):
         self._classifier = None
-        self._model_path = model_path
+        self._model_path = model_path or str(_DEFAULT_MODEL_PATH)
         self._load_attempted = False
 
     def _load_model(self):
@@ -70,15 +85,16 @@ class BloomClassifierService:
             from transformers import pipeline
 
             if self._model_path and os.path.exists(self._model_path):
-                logger.info(f"Loading Bloom classifier from {self._model_path}")
+                logger.info(f"Loading Bloom's DistilBERT classifier from {self._model_path}")
                 self._classifier = pipeline(
                     "text-classification",
                     model=self._model_path,
                     tokenizer=self._model_path,
                 )
+                logger.info("Bloom's DistilBERT classifier loaded successfully")
             else:
                 logger.info(
-                    "No fine-tuned Bloom classifier found. "
+                    f"No fine-tuned Bloom classifier found at {self._model_path}. "
                     "Using keyword-based classification."
                 )
         except Exception as e:
@@ -109,10 +125,21 @@ class BloomClassifierService:
             result = self._classifier(question_text[:512])
             if result and len(result) > 0:
                 label = result[0]["label"]
-                # Map model output to standard Bloom level
+
+                # If the label is already a Bloom level name, return it
+                for level in BLOOM_LEVELS:
+                    if level.lower() == label.lower():
+                        return level
+
+                # If it's a generic LABEL_N, map it
+                if label in LABEL_INDEX_MAP:
+                    return LABEL_INDEX_MAP[label]
+
+                # Last resort: try substring matching
                 for level in BLOOM_LEVELS:
                     if level.lower() in label.lower():
                         return level
+
                 return label
         except Exception as e:
             logger.warning(f"Model classification failed: {e}")
@@ -137,5 +164,6 @@ class BloomClassifierService:
         return "Remember"
 
 
-# Module-level singleton
+# Module-level singleton — auto-discovers the model from the project's models/ directory
 bloom_service = BloomClassifierService()
+

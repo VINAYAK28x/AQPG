@@ -21,17 +21,28 @@ export default function App() {
   /* ---- Textbook ---- */
   const [chunkCount, setChunkCount]     = useState(0);
   const [textbookLoading, setTextbookLoading] = useState(false);
+  const [totalPdfPages, setTotalPdfPages]     = useState(0);
+  const [pagesProcessed, setPagesProcessed]   = useState(0);
 
   /* ---- Pattern ---- */
   const [examName, setExamName]         = useState("");
-  const [parts, setParts]               = useState([defaultPart()]);
-  const [expandedParts, setExpandedParts] = useState([0]);
+  const [parts, setParts]               = useState(defaultPattern());
+  const [expandedParts, setExpandedParts] = useState([0, 1]);
   const [patternLoading, setPatternLoading] = useState(false);
 
   /* ---- Generation ---- */
   const [generationLoading, setGenerationLoading] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState(null);
   const [generationError, setGenerationError]       = useState(null);
+
+  /* =========================================================
+     DERIVED STATE
+     ========================================================= */
+
+  // Extract available module names from syllabus topics
+  const availableModules = topics?.modules
+    ? Object.keys(topics.modules)
+    : [];
 
   /* =========================================================
      HANDLERS
@@ -51,16 +62,20 @@ export default function App() {
     setSyllabusLoading(false);
   };
 
-  const uploadTextbook = async (e) => {
-    const file = e.target.files[0];
+  const uploadTextbook = async (file, pageRange) => {
     if (!file) return;
     const fd = new FormData();
     fd.append("file", file);
+    if (pageRange) {
+      fd.append("page_range", pageRange);
+    }
     setTextbookLoading(true);
     try {
       const res  = await fetch(`${API_BASE_URL}/chunk-textbook`, { method: "POST", body: fd });
       const data = await res.json();
       setChunkCount(data.total_chunks || 0);
+      setTotalPdfPages(data.total_pdf_pages || 0);
+      setPagesProcessed(data.pages_processed || 0);
     } catch { alert("Error uploading textbook"); }
     setTextbookLoading(false);
   };
@@ -129,6 +144,8 @@ export default function App() {
             textbookLoading={textbookLoading}
             onUpload={uploadTextbook}
             onNext={() => setStep(3)}
+            totalPdfPages={totalPdfPages}
+            pagesProcessed={pagesProcessed}
           />
         )}
 
@@ -146,6 +163,7 @@ export default function App() {
             onGenerateQuestions={generateQuestions}
             generationLoading={generationLoading}
             generationError={generationError}
+            availableModules={availableModules}
           />
         )}
 
@@ -157,15 +175,38 @@ export default function App() {
   );
 }
 
-/* Default part factory */
-function defaultPart() {
-  return {
-    part_name: "PART A", answer_type: "ALL",
-    marks_per_question: 1, total_questions: 2,
-    questions_to_answer: null, bloom_levels: ["Remember"],
-    questions: [
-      { question_no: 1, marks: 1, module: "Module 1", bloom_level: "Remember", has_internal_choice: false, sub_questions: null },
-      { question_no: 2, marks: 1, module: "Module 2", bloom_level: "Remember", has_internal_choice: false, sub_questions: null },
-    ],
-  };
+/* Default pattern factory (8x3M Part A, 4x12M OR Part B) */
+function defaultPattern() {
+  const defaultModules = ["Module I", "Module II", "Module III", "Module IV"];
+  const getMod = (i) => defaultModules[i % 4]; // Distribute roughly across first 4 modules
+
+  const partA_questions = Array.from({ length: 8 }).map((_, i) => ({
+    question_no: i + 1,
+    marks: 3,
+    module: getMod(i),
+    has_internal_choice: false,
+    sub_questions: null
+  }));
+
+  const partB_questions = Array.from({ length: 4 }).map((_, i) => ({
+    question_no: i + 1,
+    marks: 12,
+    module: getMod(i),
+    has_internal_choice: true,
+    or_choice: { marks: 12, module: getMod(i) },
+    sub_questions: null
+  }));
+
+  return [
+    {
+      part_name: "PART A", answer_type: "ALL",
+      marks_per_question: 3, total_questions: 8,
+      questions: partA_questions
+    },
+    {
+      part_name: "PART B", answer_type: "ALL",
+      marks_per_question: 12, total_questions: 4,
+      questions: partB_questions
+    }
+  ];
 }

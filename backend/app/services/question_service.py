@@ -1,10 +1,5 @@
 """
 Question Generation Service — generate exam questions using Flan-T5.
-
-Responsibilities:
-- Load the fine-tuned Flan-T5 model (or fallback to templates)
-- Generate questions based on exam pattern, topic mappings, and textbook content
-- Support different Bloom's taxonomy levels in question prompts
 """
 
 import os
@@ -65,43 +60,34 @@ class QuestionService:
     def generate_questions_from_pattern(
         self, exam_pattern, processed_data_dir: str = None
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        Generate questions for each part of the exam pattern.
 
-        Works with whatever data is available:
-        - Best: syllabus + chunks + mapping (full context for T5)
-        - OK:   syllabus only (template-based generation)
-        - Min:  no data at all (generates generic questions from module names)
-        """
         if processed_data_dir is None:
             processed_data_dir = str(PROCESSED_DATA_DIR)
 
-        # Load data files — all optional, service degrades gracefully
         topic_mapping = self._load_json(
             os.path.join(processed_data_dir, "topic_chunk_mapping.json")
         ) or {}
+
         textbook_chunks = self._load_json(
             os.path.join(processed_data_dir, "textbook_chunks.json")
         ) or []
+
         syllabus_topics = self._load_json(
             os.path.join(processed_data_dir, "syllabus_topics.json")
         ) or {}
 
-        if not syllabus_topics:
-            logger.warning("No syllabus data found — generating from module names only")
-        if not topic_mapping:
-            logger.warning("No topic-chunk mapping found — generating without textbook context")
-
-        # Ensure model is loaded
         self._load_model()
 
         generated_questions: Dict[str, List[Dict[str, Any]]] = {}
 
         for part in exam_pattern.parts:
+
             part_questions = []
 
             if part.questions:
+
                 for question in part.questions:
+
                     generated_q = self._generate_single_question(
                         question=question,
                         part=part,
@@ -109,6 +95,7 @@ class QuestionService:
                         textbook_chunks=textbook_chunks,
                         syllabus_topics=syllabus_topics,
                     )
+
                     part_questions.append(generated_q)
 
             generated_questions[part.part_name] = part_questions
@@ -118,9 +105,7 @@ class QuestionService:
     def _generate_single_question(
         self, question, part, topic_mapping, textbook_chunks, syllabus_topics
     ) -> Dict[str, Any]:
-        """Generate a single question using T5 or template fallback."""
 
-        # Get relevant context
         chunk_text = self._get_relevant_chunks(
             module=question.module,
             topic_mapping=topic_mapping,
@@ -128,213 +113,266 @@ class QuestionService:
         )
 
         topic = self._get_random_topic(question.module, syllabus_topics)
-        bloom_level = question.bloom_level or "Remember"
 
-        # Try T5 generation first
         if self._model_loaded:
             question_text = self._generate_with_t5(
                 topic=topic,
                 context=chunk_text,
-                bloom_level=bloom_level,
                 marks=question.marks,
             )
         else:
             question_text = self._generate_with_template(
                 topic=topic,
-                bloom_level=bloom_level,
                 context=chunk_text,
             )
 
-        return {
+        base_q = {
             "question_no": question.question_no,
             "marks": question.marks,
             "module": question.module,
-            "bloom_level": bloom_level,
             "text": question_text,
             "has_internal_choice": question.has_internal_choice,
             "source_chunk": chunk_text[:80] if chunk_text else None,
         }
 
+        # If an internal choice is requested, recursively generate the alternative question
+        if question.has_internal_choice and question.or_choice:
+            or_marks = question.or_choice.get("marks", question.marks)
+            or_module = question.or_choice.get("module", question.module)
+
+            or_chunk_text = self._get_relevant_chunks(
+                module=or_module,
+                topic_mapping=topic_mapping,
+                textbook_chunks=textbook_chunks,
+            )
+
+            or_topic = self._get_random_topic(or_module, syllabus_topics)
+
+            if self._model_loaded:
+                or_question_text = self._generate_with_t5(
+                    topic=or_topic, context=or_chunk_text, marks=or_marks
+                )
+            else:
+                or_question_text = self._generate_with_template(
+                    topic=or_topic, context=or_chunk_text
+                )
+            
+            base_q["or_question"] = {
+                "marks": or_marks,
+                "module": or_module,
+                "text": or_question_text,
+                "source_chunk": or_chunk_text[:80] if or_chunk_text else None,
+            }
+
+        return base_q
+
+    # =====================================================
+    # Improved T5 Generation Function (complexity control)
+    # =====================================================
+
     def _generate_with_t5(
-        self, topic: str, context: Optional[str], bloom_level: str, marks: int
+        self, topic: str, context: Optional[str], marks: int
     ) -> str:
-        """Generate a question using the Flan-T5 model."""
-        context_snippet = context[:1200] if context else "No context provided."
+        # Extract larger context
+        context_snippet = context[:600] if context else "No context provided."
 
-        # Define few-shot examples and explicit structural guidelines based on marks
+        # Extreme simplification of prompt to stop the LLM from trying to build instructions
         if marks <= 2:
-            structure_guide = "Must be a single, direct sentence asking for a definition, concept, or brief explanation."
-            example = (
-                "Example Format:\n"
-                "Topic: Database Normalization\n"
-                "Marks: 2\n"
-                "Output: Define First Normal Form (1NF) in the context of relational databases."
-            )
-        elif marks <= 6:
-            structure_guide = "Must be a multi-sentence question that asks the student to explain, compare, or apply a concept to a scenario."
-            example = (
-                "Example Format:\n"
-                "Topic: Database Normalization\n"
-                "Marks: 5\n"
-                "Output: Explain the differences between Second Normal Form (2NF) and Third Normal Form (3NF). Provide a brief example to illustrate your comparison."
-            )
+            prompt = f"Topic: {topic}\nContext: {context_snippet}\nWrite a short, formal university exam question about what this topic is:"
+            max_tokens = 80
+        elif marks <= 5:
+            prompt = f"Topic: {topic}\nContext: {context_snippet}\nWrite a medium-length, formal university exam question asking how this topic works:"
+            max_tokens = 160
         else:
-            structure_guide = "Must be a complex, multi-part analytical essay question requiring detailed evaluation or architectural discussion."
-            example = (
-                "Example Format:\n"
-                "Topic: Database Normalization\n"
-                "Marks: 10\n"
-                "Output: Discuss the process of database normalization from 1NF up to BCNF. Evaluate the trade-offs between a highly normalized database and a denormalized database in terms of read and write performance."
-            )
-
-        # Build an enterprise-grade prompt using pseudo-XML tags to logically separate instructions from context
-        prompt = (
-            f"You are an expert university professor setting a strict examination paper.\n"
-            f"Your task is to write EXACTLY ONE exam question. Do NOT provide the answer. Do NOT provide explanations.\n\n"
-            f"<requirements>\n"
-            f"- Topic: {topic}\n"
-            f"- Cognitive Level: {bloom_level} (Bloom's Taxonomy)\n"
-            f"- Marks Assigned: {marks}\n"
-            f"- Required Structure: {structure_guide}\n"
-            f"</requirements>\n\n"
-            f"<textbook_context>\n"
-            f"{context_snippet}\n"
-            f"</textbook_context>\n\n"
-            f"<instructions>\n"
-            f"Write the question directly based ONLY on the requirements and context above. Output NOTHING except the question text.\n"
-            f"{example}\n"
-            f"</instructions>\n\n"
-            f"Output:"
-        )
+            prompt = f"Topic: {topic}\nContext: {context_snippet}\nWrite a long, complex, formal university discussion question exploring this topic for {marks} marks:"
+            max_tokens = 250
 
         inputs = self._tokenizer(
-            prompt, return_tensors="pt", truncation=True, max_length=1536
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=768
         )
 
-        # Highly restrictive decoding parameters to force compliance and prevent looping
         outputs = self._model.generate(
             **inputs,
-            max_new_tokens=180,
-            temperature=0.7,
+            max_new_tokens=max_tokens,
             do_sample=True,
-            top_k=50,
-            top_p=0.9,
-            repetition_penalty=1.4,
-            no_repeat_ngram_size=3,
+            temperature=0.8,        # Increased temperature for diversity
+            top_k=50,               # Nucleus sampling
+            top_p=0.95,
+            repetition_penalty=1.2, # Stronger penalty for repeating words
+            no_repeat_ngram_size=3, # Ban repeating the same 3 words (fixes the "Illustrate the concept" loop)
             early_stopping=True
         )
 
         generated_text = self._tokenizer.decode(
             outputs[0], skip_special_tokens=True
-        )
+        ).strip()
 
-        # Aggressive cleanup of hallucinated tags or prefixes
-        generated_text = re.sub(r"^(Output|Question|Task|Example)[\s]*:[\s]*", "", generated_text, flags=re.IGNORECASE)
-        generated_text = generated_text.replace("<requirements>", "").replace("</textbook_context>", "").strip()
-        
-        # Fallback if generation failed entirely or generated a tiny fragment
+        generated_text = re.sub(
+            r"^(Question|Output|Answer|Task)[\s]*:[\s]*",
+            "",
+            generated_text,
+            flags=re.IGNORECASE
+        ).strip()
+
+        # Aggressively strip trailing instructional LLM bleed (e.g., "Provide a clear and concise definition...")
+        instruction_bleed_patterns = [
+            r"Provide a clear.*",
+            r"Describe its significance.*",
+            r"Ensure your answer.*",
+            r"Support your explanation.*",
+            r"Highlight the key.*",
+        ]
+        for pattern in instruction_bleed_patterns:
+            generated_text = re.sub(pattern, "", generated_text, flags=re.IGNORECASE).strip()
+
+        # Punctuation fallback to prevent hanging cutoffs
+        if generated_text and generated_text[-1] not in ['.', '?', '!']:
+            # Strip trailing incomplete word/sentence chunks after the last space to simulate cleanliness
+            if ' ' in generated_text:
+                generated_text = generated_text.rsplit(' ', 1)[0]
+            generated_text += "?"
+
         if len(generated_text.split()) < 3:
-            return self._generate_with_template(topic, bloom_level, context)
+            return self._generate_with_template(topic, context)
 
         return generated_text
 
-    def _generate_with_template(
-        self, topic: str, bloom_level: str, context: Optional[str]
-    ) -> str:
-        """Fallback: generate a question using templates."""
-        templates = {
-            "Remember": [
-                "Define {}.",
-                "What is {}?",
-                "State the meaning of {}.",
-                "List the main points of {}.",
-            ],
-            "Understand": [
-                "Explain the concept of {}.",
-                "Describe how {} works.",
-                "Illustrate with examples: {}.",
-                "Summarize the key ideas of {}.",
-            ],
-            "Apply": [
-                "Apply the concept of {} to solve a practical problem.",
-                "How would you use {} in a real-world scenario?",
-                "Demonstrate the application of {} with an example.",
-            ],
-            "Analyze": [
-                "Analyze the components of {}.",
-                "What factors influence {}?",
-                "Examine the relationship between {} and related concepts.",
-            ],
-            "Evaluate": [
-                "Evaluate the effectiveness of {}.",
-                "Critically assess the merits and drawbacks of {}.",
-                "Compare the advantages and disadvantages of {}.",
-            ],
-            "Create": [
-                "Design a solution using the principles of {}.",
-                "Propose a new approach to {}.",
-                "Develop a strategy for improving {}.",
-            ],
-        }
+    # =====================================================
+    # Template fallback
+    # =====================================================
 
-        level_templates = templates.get(bloom_level, templates["Remember"])
-        question_text = random.choice(level_templates).format(topic)
+    def _generate_with_template(
+        self, topic: str, context: Optional[str]
+    ) -> str:
+
+        templates = [
+            "Explain the concept of {}.",
+            "Describe how {} works.",
+            "Illustrate with examples: {}.",
+            "Summarize the key ideas of {}.",
+            "Analyze the components of {}.",
+            "What factors influence {}?",
+            "Examine the relationship between {} and related concepts.",
+        ]
+
+        question_text = random.choice(templates).format(topic)
 
         if context:
             question_text += f"\n\n[Based on: {context[:100]}...]"
 
         return question_text
 
+    @staticmethod
+    def _normalize_module_name(name: str) -> str:
+        """
+        Normalize a module name so that both Arabic and Roman numeral
+        variants map to the same canonical form.
+        e.g. "Module 1" -> "module_1", "Module I" -> "module_1",
+             "Module IV" -> "module_4", "Module 4" -> "module_4"
+        """
+        roman_to_arabic = {
+            "i": "1", "ii": "2", "iii": "3", "iv": "4",
+            "v": "5", "vi": "6", "vii": "7", "viii": "8",
+        }
+        text = name.strip().lower()
+        # Try to extract "module <token>" pattern
+        m = re.match(r"^module\s+(.+)$", text)
+        if m:
+            token = m.group(1).strip()
+            # If the token is a Roman numeral, convert it
+            if token in roman_to_arabic:
+                return f"module_{roman_to_arabic[token]}"
+            # If it's already an Arabic numeral, use it
+            if token.isdigit():
+                return f"module_{token}"
+            # Otherwise, return a cleaned version
+            return f"module_{token}"
+        return text.replace(" ", "_")
+
+    def _find_matching_key(self, module: str, keys) -> Optional[str]:
+        """Find the dictionary key that matches the given module name exactly
+        after normalization. Returns the original key or None."""
+        norm = self._normalize_module_name(module)
+        for key in keys:
+            if self._normalize_module_name(key) == norm:
+                return key
+        return None
+
     def _get_relevant_chunks(
         self, module: str, topic_mapping: Dict, textbook_chunks: List[Dict]
     ) -> Optional[str]:
-        """Get a relevant textbook chunk for a given module."""
+
         chunks_dict = {
             chunk["chunk_id"]: chunk["text"] for chunk in textbook_chunks
         }
 
         relevant_chunks = []
-        for topic, chunks in topic_mapping.items():
-            if module.lower() in topic.lower() or module.lower() in str(chunks).lower():
-                if isinstance(chunks, list):
-                    for chunk_info in chunks:
-                        chunk_id = chunk_info if isinstance(chunk_info, int) else chunk_info.get("chunk_id")
-                        if chunk_id in chunks_dict:
-                            relevant_chunks.append(chunks_dict[chunk_id])
+
+        # First, try exact normalized matching (handles Roman ↔ Arabic)
+        matched_key = self._find_matching_key(module, topic_mapping.keys())
+
+        if matched_key:
+            value = topic_mapping[matched_key]
+            if isinstance(value, dict) and "chunks" in value:
+                for chunk_info in value["chunks"]:
+                    chunk_id = chunk_info.get("chunk_id")
+                    if chunk_id in chunks_dict:
+                        relevant_chunks.append(chunks_dict[chunk_id])
+            elif isinstance(value, list):
+                for chunk_info in value:
+                    chunk_id = (
+                        chunk_info
+                        if isinstance(chunk_info, int)
+                        else chunk_info.get("chunk_id")
+                    )
+                    if chunk_id in chunks_dict:
+                        relevant_chunks.append(chunks_dict[chunk_id])
+        else:
+            logger.warning(
+                f"No matching module found for '{module}' in topic_mapping keys: "
+                f"{list(topic_mapping.keys())}"
+            )
 
         return random.choice(relevant_chunks) if relevant_chunks else None
 
     def _get_random_topic(
         self, module: str, syllabus_topics: Optional[Dict]
     ) -> str:
-        """Get a random topic from the specified module."""
         if not syllabus_topics:
             return module
 
-        module_key = module.lower()
+        # Handle new structured syllabus format
+        modules = syllabus_topics
+        if "modules" in syllabus_topics:
+            modules = syllabus_topics["modules"]
 
-        # Try exact match first
-        for key, topics in syllabus_topics.items():
-            if module_key in key.lower():
-                if isinstance(topics, list) and topics:
+        matched_key = self._find_matching_key(module, modules.keys())
+
+        if matched_key:
+            value = modules[matched_key]
+            # New format: value is dict with 'topics' key
+            if isinstance(value, dict) and "topics" in value:
+                topics = value["topics"]
+                if topics:
                     return random.choice(topics)
+            # Legacy format: value is list of topics
+            elif isinstance(value, list) and value:
+                return random.choice(value)
 
-        # Fallback: random topic from any module
-        all_topics = []
-        for topics in syllabus_topics.values():
-            if isinstance(topics, list):
-                all_topics.extend(topics)
-
-        return random.choice(all_topics) if all_topics else module
+        # Fallback to the module name itself. No cross-module contamination.
+        return module
 
     @staticmethod
     def _load_json(filepath: str) -> Optional[Any]:
-        """Safely load a JSON file."""
+
         if not os.path.exists(filepath):
             return None
+
         with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
 
 
-# Module-level singleton
 question_service = QuestionService()

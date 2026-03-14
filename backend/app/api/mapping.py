@@ -1,5 +1,5 @@
 """
-Mapping API Router — endpoint for semantic topic-to-chunk mapping.
+Mapping API Router — endpoint for semantic module-to-chunk mapping.
 """
 
 import json
@@ -17,8 +17,11 @@ router = APIRouter(tags=["mapping"])
 @router.post("/semantic-mapping")
 async def semantic_mapping():
     """
-    Perform semantic mapping between syllabus topics and textbook chunks
+    Perform semantic mapping between syllabus modules and textbook chunks
     using the SBERT model.
+
+    Uses module-level mapping: each module is mapped to relevant chunks
+    as a whole, rather than mapping individual topics separately.
 
     Requires that syllabus and textbook have been processed first.
     """
@@ -31,16 +34,13 @@ async def semantic_mapping():
     if not chunks_path.exists():
         return {"error": "Textbook not processed yet. Upload a textbook first."}
 
-    # Load syllabus topics
+    # Load structured syllabus
     with open(syllabus_path, "r", encoding="utf-8") as f:
-        modules = json.load(f)
+        structured_syllabus = json.load(f)
 
-    topics = []
-    for topic_list in modules.values():
-        topics.extend(topic_list)
-
-    if not topics:
-        return {"error": "No topics were extracted from the syllabus. Please check the uploaded syllabus PDF."}
+    modules = structured_syllabus.get("modules", {})
+    if not modules:
+        return {"error": "No modules were extracted from the syllabus. Please check the uploaded syllabus PDF."}
 
     # Load textbook chunks
     with open(chunks_path, "r", encoding="utf-8") as f:
@@ -49,18 +49,20 @@ async def semantic_mapping():
     if not chunks:
         return {"error": "No text chunks were generated from the textbook. Please check the uploaded textbook PDF."}
 
-    # Perform mapping using SBERT
-    mapping = mapping_service.map_topics_to_chunks(topics, chunks)
+    # Perform module-level mapping using SBERT
+    module_mapping = mapping_service.map_modules_to_chunks(
+        structured_syllabus, chunks
+    )
 
-    if not mapping:
-        return {"error": "Semantic mapping failed to associate any topics with chunks. Please ensure the syllabus and textbook content are related."}
+    if not module_mapping:
+        return {"error": "Semantic mapping failed to associate any modules with chunks. Please ensure the syllabus and textbook content are related."}
 
     # Persist mapping
     mapping_path = PROCESSED_DATA_DIR / "topic_chunk_mapping.json"
     with open(mapping_path, "w", encoding="utf-8") as f:
-        json.dump(mapping, f, indent=4)
+        json.dump(module_mapping, f, indent=4)
 
     return {
         "message": "Semantic mapping completed successfully",
-        "mapping": mapping,
+        "mapping": module_mapping,
     }

@@ -33,7 +33,6 @@ async def set_question_pattern(pattern: ExamPattern):
                     "part": part.part_name,
                     "marks": question.marks,
                     "module": question.module,
-                    "bloom_level": question.bloom_level,
                     "answer_type": part.answer_type,
                     "has_internal_choice": question.has_internal_choice,
                 })
@@ -66,6 +65,11 @@ async def generate_questions(pattern: ExamPattern):
             for q in questions:
                 classified_level = bloom_service.classify(q.get("text", ""))
                 q["classified_bloom_level"] = classified_level
+                
+                # Classify the alternate OR question if it exists
+                if "or_question" in q:
+                    or_level = bloom_service.classify(q["or_question"].get("text", ""))
+                    q["or_question"]["classified_bloom_level"] = or_level
 
         # Persist output
         questions_path = PROCESSED_DATA_DIR / "generated_questions.json"

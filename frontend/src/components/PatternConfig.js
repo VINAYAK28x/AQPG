@@ -1,7 +1,5 @@
 import React from "react";
 
-const BLOOM_LEVELS = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"];
-const MODULES = ["Module 1", "Module 2", "Module 3", "Module 4"];
 
 export default function PatternConfig({
   examName, setExamName,
@@ -12,7 +10,12 @@ export default function PatternConfig({
   onGenerateQuestions,
   generationLoading,
   generationError,
+  availableModules,
 }) {
+  // Use dynamic module list if available, fallback to default
+  const MODULES = availableModules && availableModules.length > 0
+    ? availableModules
+    : ["Module I", "Module II", "Module III", "Module IV"];
 
   const updatePart = (idx, field, value) => {
     const p = [...parts]; p[idx][field] = value; setParts(p);
@@ -27,8 +30,8 @@ export default function PatternConfig({
     setParts([...parts, {
       part_name: `PART ${letter}`, answer_type: "ALL",
       marks_per_question: 1, total_questions: 1,
-      questions_to_answer: null, bloom_levels: ["Remember"],
-      questions: [{ question_no: 1, marks: 1, module: "Module 1", bloom_level: "Remember", has_internal_choice: false, sub_questions: null }]
+      questions_to_answer: null,
+      questions: [{ question_no: 1, marks: 1, module: MODULES[0], has_internal_choice: false, sub_questions: null }]
     }]);
   };
 
@@ -37,7 +40,7 @@ export default function PatternConfig({
   const addQ = (pIdx) => {
     const p = [...parts];
     const n = p[pIdx].questions.length + 1;
-    p[pIdx].questions.push({ question_no: n, marks: p[pIdx].marks_per_question || 1, module: "Module 1", bloom_level: "Remember", has_internal_choice: false, sub_questions: null });
+    p[pIdx].questions.push({ question_no: n, marks: p[pIdx].marks_per_question || 1, module: MODULES[0], has_internal_choice: false, sub_questions: null });
     p[pIdx].total_questions = p[pIdx].questions.length;
     setParts(p);
   };
@@ -96,7 +99,7 @@ export default function PatternConfig({
             {expandedParts.includes(pIdx) && (
               <>
                 <div className="part-settings">
-                  <div className="form-row-3">
+                  <div className="form-row-2">
                     <div className="form-group">
                       <label>Part Name</label>
                       <input type="text" value={part.part_name} onChange={e => updatePart(pIdx, "part_name", e.target.value)} />
@@ -108,17 +111,14 @@ export default function PatternConfig({
                         <option value="ANY">ANY (Answer Any N)</option>
                       </select>
                     </div>
-                    <div className="form-group">
-                      <label>Bloom Levels</label>
-                      <input type="text" value={part.bloom_levels.join(", ")} onChange={e => updatePart(pIdx, "bloom_levels", e.target.value.split(",").map(s => s.trim()).filter(Boolean))} placeholder="Remember, Understand" />
-                    </div>
                   </div>
                 </div>
 
                 <div className="questions-box">
                   <h5 className="questions-heading">Questions in {part.part_name}</h5>
                   {part.questions?.map((q, qIdx) => (
-                    <div key={qIdx} className="question-row">
+                    <React.Fragment key={qIdx}>
+                    <div className="question-row">
                       <span className="q-num">Q{q.question_no}</span>
                       <div className="q-fields">
                         <div className="form-group mini">
@@ -131,21 +131,56 @@ export default function PatternConfig({
                             {MODULES.map(m => <option key={m} value={m}>{m}</option>)}
                           </select>
                         </div>
-                        <div className="form-group mini">
-                          <label>Bloom Level</label>
-                          <select value={q.bloom_level || "Remember"} onChange={e => updateQuestion(pIdx, qIdx, "bloom_level", e.target.value)}>
-                            {BLOOM_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-                          </select>
-                        </div>
-                        <div className="form-group mini checkbox-group">
-                          <label>Choice</label>
-                          <input type="checkbox" checked={q.has_internal_choice} onChange={e => updateQuestion(pIdx, qIdx, "has_internal_choice", e.target.checked)} />
+                        <div className="form-group mini choice-toggle">
+                          <label>Choice (OR)</label>
+                          <label className="switch">
+                            <input
+                              type="checkbox"
+                              checked={q.has_internal_choice}
+                              onChange={e => {
+                                const checked = e.target.checked;
+                                // Initialize default or_choice if turning on
+                                if (checked && !q.or_choice) {
+                                  updateQuestion(pIdx, qIdx, "or_choice", { marks: q.marks, module: q.module });
+                                }
+                                updateQuestion(pIdx, qIdx, "has_internal_choice", checked);
+                              }}
+                            />
+                            <span className="switch-slider"></span>
+                          </label>
                         </div>
                       </div>
                       {part.questions.length > 1 && (
                         <button className="btn-sm orange" onClick={() => removeQ(pIdx, qIdx)}>✕</button>
                       )}
                     </div>
+                    {/* Render extra sub-panel for OR choice if active */}
+                    {q.has_internal_choice && (
+                      <div className="or-choice-panel">
+                        <div className="or-choice-indicator">↳</div>
+                        <div className="or-choice-fields">
+                          <span className="or-choice-label">Alternative Question (OR)</span>
+                          <div className="form-group mini">
+                            <label>Marks</label>
+                            <input 
+                              type="number" min="1" 
+                              value={q.or_choice?.marks || q.marks} 
+                              onChange={e => updateQuestion(pIdx, qIdx, "or_choice", { ...q.or_choice, marks: parseInt(e.target.value) })}
+                            />
+                          </div>
+                          <div className="form-group mini">
+                            <label>Module</label>
+                            <select 
+                              value={q.or_choice?.module || q.module} 
+                              onChange={e => updateQuestion(pIdx, qIdx, "or_choice", { ...q.or_choice, module: e.target.value })}
+                            >
+                              {MODULES.map(m => <option key={`or-${m}`} value={m}>{m}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    </React.Fragment>
                   ))}
                   <button className="btn-sm green full-width" onClick={() => addQ(pIdx)}>+ Add Question</button>
                 </div>

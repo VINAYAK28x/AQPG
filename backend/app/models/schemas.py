@@ -18,8 +18,8 @@ class QuestionPattern(BaseModel):
     question_no: int
     marks: int
     module: str
-    bloom_level: Optional[str] = "Remember"
     has_internal_choice: bool = False
+    or_choice: Optional[dict] = None  # { "marks": int, "module": str }
     sub_questions: Optional[List[SubQuestionPattern]] = None
 
 
@@ -30,7 +30,6 @@ class PartPattern(BaseModel):
     marks_per_question: int
     total_questions: int
     questions_to_answer: Optional[int] = None
-    bloom_levels: List[str]
     questions: Optional[List[QuestionPattern]] = None
 
 

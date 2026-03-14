@@ -26,7 +26,7 @@ PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 # --------------------------------------------------
 
 SBERT_MODEL_PATH = str(PROJECT_ROOT / "models" / "sbert_custom_model")
-FLAN_T5_MODEL_PATH = str(PROJECT_ROOT / "models" / "flan_t5_cns_model")
+FLAN_T5_MODEL_PATH = str(PROJECT_ROOT / "models" / "flan t5 large")
 
 # Fallback model names (downloaded from HuggingFace if local not found)
 SBERT_FALLBACK_MODEL = "all-MiniLM-L6-v2"
