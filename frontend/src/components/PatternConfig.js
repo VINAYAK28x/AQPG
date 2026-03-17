@@ -55,11 +55,99 @@ export default function PatternConfig({
   const toggleExpand = (idx) =>
     setExpandedParts(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
 
+  // --- Generalized Sub-question helpers ---
+  const toggleSubQuestions = (pIdx, qIdx, isOr = false) => {
+    const p = [...parts];
+    const q = p[pIdx].questions[qIdx];
+    const target = isOr ? q.or_choice : q;
+    const baseMarks = isOr ? q.marks : q.marks; // Marks usually match for OR questions
+
+    if (target.sub_questions && target.sub_questions.length > 0) {
+      target.sub_questions = null;
+    } else {
+      const count = 2;
+      const perMark = Math.floor(target.marks / count);
+      target.sub_questions = Array.from({ length: count }, (_, i) => ({
+        label: String.fromCharCode(97 + i), // a, b, c...
+        marks: perMark,
+      }));
+    }
+    setParts(p);
+  };
+
+  const addSubQuestion = (pIdx, qIdx, isOr = false) => {
+    const p = [...parts];
+    const q = p[pIdx].questions[qIdx];
+    const target = isOr ? q.or_choice : q;
+    
+    const nextLabel = String.fromCharCode(97 + (target.sub_questions?.length || 0));
+    const allocated = (target.sub_questions || []).reduce((s, sq) => s + sq.marks, 0);
+    const remainingMarks = target.marks - allocated;
+    
+    target.sub_questions = [...(target.sub_questions || []), { label: nextLabel, marks: Math.max(1, remainingMarks) }];
+    setParts(p);
+  };
+
+  const removeSubQuestion = (pIdx, qIdx, sqIdx, isOr = false) => {
+    const p = [...parts];
+    const q = p[pIdx].questions[qIdx];
+    const target = isOr ? q.or_choice : q;
+    
+    target.sub_questions = target.sub_questions
+      .filter((_, i) => i !== sqIdx)
+      .map((sq, i) => ({ ...sq, label: String.fromCharCode(97 + i) }));
+    if (target.sub_questions.length === 0) target.sub_questions = null;
+    setParts(p);
+  };
+
+  const updateSubQuestion = (pIdx, qIdx, sqIdx, field, value, isOr = false) => {
+    const p = [...parts];
+    const q = p[pIdx].questions[qIdx];
+    const target = isOr ? q.or_choice : q;
+    target.sub_questions[sqIdx][field] = value;
+    setParts(p);
+  };
+
   const totalQ = parts.reduce((s, p) => s + (p.questions?.length || 0), 0);
   const totalM = parts.reduce((s, p) => s + (p.questions?.reduce((a, q) => a + (q.marks || 0), 0) || 0), 0);
 
+  // Sub-question config sub-panel component for reusability
+  const SubQuestionsConfig = ({ pIdx, qIdx, subQuestions, totalMarks, isOr = false }) => {
+    if (!subQuestions || subQuestions.length === 0) return null;
+    const allocatedMarks = subQuestions.reduce((s, sq) => s + sq.marks, 0);
+    const isError = allocatedMarks !== totalMarks;
+
+    return (
+      <div className={`sub-questions-panel ${isOr ? 'or-sub-panel' : ''}`}>
+        <div className="sub-questions-header">
+          <span className="sub-questions-title">📋 {isOr ? 'OR ' : ''}Sub-Questions</span>
+          <span className={`sub-questions-summary ${isError ? 'error-text' : ''}`}>
+            {subQuestions.length} parts • {allocatedMarks}/{totalMarks} marks {isError ? '⚠️' : '✅'}
+          </span>
+        </div>
+        {subQuestions.map((sq, sqIdx) => (
+          <div key={sqIdx} className="sub-question-row">
+            <span className="sq-label">({sq.label})</span>
+            <div className="form-group mini">
+              <label>Marks</label>
+              <input
+                type="number" min="1"
+                value={sq.marks}
+                onChange={e => updateSubQuestion(pIdx, qIdx, sqIdx, "marks", parseInt(e.target.value), isOr)}
+              />
+            </div>
+            {subQuestions.length > 1 && (
+              <button className="btn-sm orange" onClick={() => removeSubQuestion(pIdx, qIdx, sqIdx, isOr)} style={{padding: "3px 8px", fontSize: "10px"}}>✕</button>
+            )}
+          </div>
+        ))}
+        <button className="btn-sm green" onClick={() => addSubQuestion(pIdx, qIdx, isOr)} style={{marginTop: "6px", fontSize: "11px", padding: "4px 10px"}}>+ Add Sub-Q</button>
+      </div>
+    );
+  };
+
   return (
-    <section className="card">
+    <section className="card pattern-config-card">
       <h2 className="card-title">
         <span className="card-icon">⚙️</span> Question Paper Pattern
       </h2>
@@ -97,7 +185,7 @@ export default function PatternConfig({
             </div>
 
             {expandedParts.includes(pIdx) && (
-              <>
+              <div className="part-body">
                 <div className="part-settings">
                   <div className="form-row-2">
                     <div className="form-group">
@@ -118,73 +206,126 @@ export default function PatternConfig({
                   <h5 className="questions-heading">Questions in {part.part_name}</h5>
                   {part.questions?.map((q, qIdx) => (
                     <React.Fragment key={qIdx}>
-                    <div className="question-row">
-                      <span className="q-num">Q{q.question_no}</span>
-                      <div className="q-fields">
-                        <div className="form-group mini">
-                          <label>Marks</label>
-                          <input type="number" value={q.marks} min="1" onChange={e => updateQuestion(pIdx, qIdx, "marks", parseInt(e.target.value))} />
-                        </div>
-                        <div className="form-group mini">
-                          <label>Module</label>
-                          <select value={q.module} onChange={e => updateQuestion(pIdx, qIdx, "module", e.target.value)}>
-                            {MODULES.map(m => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                        </div>
-                        <div className="form-group mini choice-toggle">
-                          <label>Choice (OR)</label>
-                          <label className="switch">
-                            <input
-                              type="checkbox"
-                              checked={q.has_internal_choice}
-                              onChange={e => {
-                                const checked = e.target.checked;
-                                // Initialize default or_choice if turning on
-                                if (checked && !q.or_choice) {
-                                  updateQuestion(pIdx, qIdx, "or_choice", { marks: q.marks, module: q.module });
-                                }
-                                updateQuestion(pIdx, qIdx, "has_internal_choice", checked);
-                              }}
-                            />
-                            <span className="switch-slider"></span>
-                          </label>
-                        </div>
-                      </div>
-                      {part.questions.length > 1 && (
-                        <button className="btn-sm orange" onClick={() => removeQ(pIdx, qIdx)}>✕</button>
-                      )}
-                    </div>
-                    {/* Render extra sub-panel for OR choice if active */}
-                    {q.has_internal_choice && (
-                      <div className="or-choice-panel">
-                        <div className="or-choice-indicator">↳</div>
-                        <div className="or-choice-fields">
-                          <span className="or-choice-label">Alternative Question (OR)</span>
-                          <div className="form-group mini">
-                            <label>Marks</label>
-                            <input 
-                              type="number" min="1" 
-                              value={q.or_choice?.marks || q.marks} 
-                              onChange={e => updateQuestion(pIdx, qIdx, "or_choice", { ...q.or_choice, marks: parseInt(e.target.value) })}
-                            />
+                      <div className={`question-setup-block ${q.has_internal_choice ? 'has-choice' : ''}`}>
+                        <div className="question-row">
+                          <span className="q-num">Q{q.question_no}</span>
+                          <div className="q-fields">
+                            <div className="form-group mini">
+                              <label>Marks</label>
+                              <input type="number" value={q.marks} min="1" onChange={e => updateQuestion(pIdx, qIdx, "marks", parseInt(e.target.value))} />
+                            </div>
+                            <div className="form-group mini">
+                              <label>Module</label>
+                              <select value={q.module} onChange={e => updateQuestion(pIdx, qIdx, "module", e.target.value)}>
+                                {MODULES.map(m => <option key={m} value={m}>{m}</option>)}
+                              </select>
+                            </div>
+                            <div className="form-group mini choice-toggle">
+                              <label>Choice (OR)</label>
+                              <label className="switch">
+                                <input
+                                  type="checkbox"
+                                  checked={q.has_internal_choice}
+                                  onChange={e => {
+                                    const checked = e.target.checked;
+                                    if (checked && !q.or_choice) {
+                                      updateQuestion(pIdx, qIdx, "or_choice", { marks: q.marks, module: q.module, sub_questions: null });
+                                    }
+                                    updateQuestion(pIdx, qIdx, "has_internal_choice", checked);
+                                  }}
+                                />
+                                <span className="switch-slider"></span>
+                              </label>
+                            </div>
+                            {/* Main Sub-questions toggle for marks >= 12 */}
+                            {q.marks >= 12 && (
+                              <div className="form-group mini choice-toggle">
+                                <label>Sub-Qs</label>
+                                <label className="switch">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!(q.sub_questions && q.sub_questions.length > 0)}
+                                    onChange={() => toggleSubQuestions(pIdx, qIdx, false)}
+                                  />
+                                  <span className="switch-slider"></span>
+                                </label>
+                              </div>
+                            )}
                           </div>
-                          <div className="form-group mini">
-                            <label>Module</label>
-                            <select 
-                              value={q.or_choice?.module || q.module} 
-                              onChange={e => updateQuestion(pIdx, qIdx, "or_choice", { ...q.or_choice, module: e.target.value })}
-                            >
-                              {MODULES.map(m => <option key={`or-${m}`} value={m}>{m}</option>)}
-                            </select>
-                          </div>
+                          {part.questions.length > 1 && (
+                            <button className="btn-sm orange" onClick={() => removeQ(pIdx, qIdx)}>✕</button>
+                          )}
                         </div>
+
+                        {/* Config for main question sub-parts */}
+                        {q.sub_questions && q.sub_questions.length > 0 && (
+                          <SubQuestionsConfig 
+                            pIdx={pIdx} qIdx={qIdx} 
+                            subQuestions={q.sub_questions} 
+                            totalMarks={q.marks} 
+                            isOr={false} 
+                          />
+                        )}
+
+                        {/* Internal Choice (OR) Panel */}
+                        {q.has_internal_choice && (
+                          <div className="or-choice-panel">
+                            <div className="or-choice-fields">
+                              <div className="or-header-row">
+                                <div className="or-choice-indicator">↳</div>
+                                <span className="or-choice-label">Alternative (OR Choice)</span>
+                              </div>
+                              <div className="or-fields-row">
+                                <div className="form-group mini">
+                                  <label>Marks</label>
+                                  <input 
+                                    type="number" min="1" 
+                                    value={q.or_choice?.marks || q.marks} 
+                                    onChange={e => updateQuestion(pIdx, qIdx, "or_choice", { ...q.or_choice, marks: parseInt(e.target.value) })}
+                                  />
+                                </div>
+                                <div className="form-group mini">
+                                  <label>Module</label>
+                                  <select 
+                                    value={q.or_choice?.module || q.module} 
+                                    onChange={e => updateQuestion(pIdx, qIdx, "or_choice", { ...q.or_choice, module: e.target.value })}
+                                  >
+                                    {MODULES.map(m => <option key={`or-${m}`} value={m}>{m}</option>)}
+                                  </select>
+                                </div>
+                                {((q.or_choice?.marks || q.marks) >= 12) && (
+                                  <div className="form-group mini choice-toggle">
+                                    <label>Sub-Qs</label>
+                                    <label className="switch">
+                                      <input
+                                        type="checkbox"
+                                        checked={!!(q.or_choice?.sub_questions && q.or_choice.sub_questions.length > 0)}
+                                        onChange={() => toggleSubQuestions(pIdx, qIdx, true)}
+                                      />
+                                      <span className="switch-slider"></span>
+                                    </label>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Config for OR question sub-parts */}
+                            {q.or_choice?.sub_questions && q.or_choice.sub_questions.length > 0 && (
+                              <SubQuestionsConfig 
+                                pIdx={pIdx} qIdx={qIdx} 
+                                subQuestions={q.or_choice.sub_questions} 
+                                totalMarks={q.or_choice.marks} 
+                                isOr={true} 
+                              />
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
                     </React.Fragment>
                   ))}
                   <button className="btn-sm green full-width" onClick={() => addQ(pIdx)}>+ Add Question</button>
                 </div>
-              </>
+              </div>
             )}
           </div>
         ))}

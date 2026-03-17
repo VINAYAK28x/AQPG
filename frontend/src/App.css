@@ -677,9 +677,146 @@ input:checked + .switch-slider:before {
 }
 .or-choice-label {
   font-size: 13px;
-  font-weight: 600;
-  color: #a5b4fc;
-  min-width: 140px;
+  font-weight: 700;
+  color: #c084fc;
+  margin-left: 6px;
+}
+.or-choice-indicator {
+  font-family: monospace;
+  color: #c084fc;
+  font-weight: bold;
+  font-size: 16px;
+}
+.error-text {
+  color: #f87171 !important;
+  font-weight: 700;
+}
+.question-setup-block {
+  margin-bottom: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+.question-setup-block.has-choice {
+  border-color: rgba(192, 132, 252, 0.2);
+  background: rgba(192, 132, 252, 0.03);
+}
+.or-header-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.or-fields-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding-left: 20px;
+}
+.sub-q-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 8px !important;
+  margin-top: 4px;
+}
+
+
+/* ---------- SUB-QUESTIONS (PATTERN CONFIG) ---------- */
+.sub-questions-panel {
+  margin-left: 32px;
+  margin-top: 8px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  background: rgba(250, 204, 21, 0.04);
+  border-left: 3px solid #fbbf24;
+  border-radius: 4px 8px 8px 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.sub-questions-panel.or-sub-panel {
+  background: rgba(192, 132, 252, 0.04);
+  border-left-color: #c084fc;
+}
+.sub-questions-panel.or-sub-panel .sub-questions-title {
+  color: #c084fc;
+}
+.sub-questions-panel.or-sub-panel .sq-label {
+  color: #c084fc;
+}
+.sub-questions-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.sub-questions-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fbbf24;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sub-questions-summary {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+}
+.sub-question-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 6px;
+}
+.sq-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fbbf24;
+  min-width: 28px;
+}
+
+/* ---------- SUB-QUESTIONS (GENERATED DISPLAY) ---------- */
+.gen-sub-questions {
+  margin: 12px 0 8px 16px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(251,191,36,0.3);
+}
+.gen-sub-question {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.gen-sq-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #fbbf24;
+  min-width: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.gen-sq-body {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.gen-sq-body .gen-q-text {
+  flex: 1;
+  margin-bottom: 0;
+}
+.gen-sq-marks {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fbbf24;
+  background: rgba(251,191,36,0.12);
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(251,191,36,0.25);
+  flex-shrink: 0;
+  margin-top: 3px;
 }
 
 /* ---------- GENERATED QUESTIONS ---------- */
@@ -793,6 +930,49 @@ input:checked + .switch-slider:before {
   background: rgba(192,132,252,0.12);
   color: #d8b4fe;
   border: 1px solid rgba(192,132,252,0.3);
+}
+
+/* ---------- REGENERATE BUTTON ---------- */
+.regen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(129,140,248,0.3);
+  background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15));
+  color: #a5b4fc;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+.regen-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(99,102,241,0.35), rgba(139,92,246,0.35));
+  border-color: #818cf8;
+  transform: scale(1.1);
+  box-shadow: 0 0 12px rgba(129,140,248,0.3);
+}
+.regen-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.regen-spinning {
+  animation: regenSpin 0.8s linear infinite;
+}
+@keyframes regenSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Brief flash when a question is regenerated */
+.regen-flash {
+  animation: regenFlash 0.6s ease-out;
+}
+@keyframes regenFlash {
+  0%   { background: rgba(99,102,241,0.25); }
+  100% { background: rgba(0,0,0,0.2); }
 }
 
 /* ---------- RESPONSIVE ---------- */

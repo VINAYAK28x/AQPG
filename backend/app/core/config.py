@@ -17,8 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 # Backend root
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
-# Runtime output directory
-PROCESSED_DATA_DIR = BACKEND_ROOT / "processed_data"
+# Runtime output directory (moved to PROJECT_ROOT to avoid uvicorn --reload loops)
+PROCESSED_DATA_DIR = PROJECT_ROOT / "processed_data"
 PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # --------------------------------------------------
@@ -26,7 +26,7 @@ PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 # --------------------------------------------------
 
 SBERT_MODEL_PATH = str(PROJECT_ROOT / "models" / "sbert_custom_model")
-FLAN_T5_MODEL_PATH = str(PROJECT_ROOT / "models" / "flan t5 large")
+FLAN_T5_MODEL_PATH = str(PROJECT_ROOT / "models" / "flan t5 large final")
 
 # Fallback model names (downloaded from HuggingFace if local not found)
 SBERT_FALLBACK_MODEL = "all-MiniLM-L6-v2"

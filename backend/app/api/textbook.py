@@ -14,6 +14,7 @@ from app.services.ingestion_service import extract_pages
 from app.services.chunking_service import chunk_text_by_page
 from app.utils.image_utils import extract_images_from_pdf, map_chunks_to_images
 from app.core.config import PROCESSED_DATA_DIR
+from app.services.question_service import question_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["textbook"])
@@ -104,6 +105,9 @@ async def chunk_textbook(
     output_path = PROCESSED_DATA_DIR / "textbook_chunks.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(final_chunks, f, indent=4)
+
+    # Clear stale caches so next generation reads fresh data
+    question_service.clear_caches()
 
     return {
         "message": "Textbook processed successfully",

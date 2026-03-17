@@ -13,6 +13,7 @@ from app.services.syllabus_service import (
     build_structured_syllabus,
 )
 from app.core.config import PROCESSED_DATA_DIR
+from app.services.question_service import question_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["syllabus"])
@@ -39,6 +40,9 @@ async def extract_syllabus(file: UploadFile = File(...)):
     syllabus_path = PROCESSED_DATA_DIR / "syllabus_topics.json"
     with open(syllabus_path, "w", encoding="utf-8") as f:
         json.dump(structured, f, indent=4)
+
+    # Clear stale caches so next generation reads fresh data
+    question_service.clear_caches()
 
     return {
         "message": "Syllabus topics extracted successfully",

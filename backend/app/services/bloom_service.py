@@ -12,7 +12,7 @@ Bloom's Levels: Remember, Understand, Apply, Analyze, Evaluate, Create
 import os
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -119,28 +119,58 @@ class BloomClassifierService:
         # Fallback to keyword heuristics
         return self._classify_with_keywords(question_text)
 
+    def classify_batch(self, question_texts: List[str]) -> List[str]:
+        """
+        Classify a batch of questions into Bloom's taxonomy levels.
+        MUCH faster than individual calls on CPU.
+        """
+        if not question_texts:
+            return []
+            
+        self._load_model()
+        
+        # If model is not loaded, fallback to keywords for each
+        if self._classifier is None:
+            return [self._classify_with_keywords(t) for t in question_texts]
+            
+        try:
+            # transformers pipeline handles lists efficiently
+            results = self._classifier(question_texts, batch_size=4)
+            labels = []
+            for i, res in enumerate(results):
+                label = res["label"]
+                
+                # Mapping logic (extracted to helper)
+                labels.append(self._map_label_to_bloom(label, question_texts[i]))
+            return labels
+        except Exception as e:
+            logger.warning(f"Batch classification failed: {e}")
+            return [self._classify_with_keywords(t) for t in question_texts]
+
+    def _map_label_to_bloom(self, label: str, original_text: str) -> str:
+        """Helper to map model labels to BLOOM_LEVELS."""
+        # If the label is already a Bloom level name, return it
+        for level in BLOOM_LEVELS:
+            if level.lower() == label.lower():
+                return level
+
+        # If it's a generic LABEL_N, map it
+        if label in LABEL_INDEX_MAP:
+            return LABEL_INDEX_MAP[label]
+
+        # Last resort: try substring matching
+        for level in BLOOM_LEVELS:
+            if level.lower() in label.lower():
+                return level
+
+        return self._classify_with_keywords(original_text)
+
     def _classify_with_model(self, question_text: str) -> str:
         """Classify using the DistilBERT pipeline."""
         try:
             result = self._classifier(question_text[:512])
             if result and len(result) > 0:
-                label = result[0]["label"]
-
-                # If the label is already a Bloom level name, return it
-                for level in BLOOM_LEVELS:
-                    if level.lower() == label.lower():
-                        return level
-
-                # If it's a generic LABEL_N, map it
-                if label in LABEL_INDEX_MAP:
-                    return LABEL_INDEX_MAP[label]
-
-                # Last resort: try substring matching
-                for level in BLOOM_LEVELS:
-                    if level.lower() in label.lower():
-                        return level
-
-                return label
+                return self._map_label_to_bloom(result[0]["label"], question_text)
         except Exception as e:
             logger.warning(f"Model classification failed: {e}")
 
