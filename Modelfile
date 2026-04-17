@@ -1,0 +1,2 @@
+FROM mistral
+ADAPTER "models/mistral 1/Mistral-1-F32-LoRA.gguf"

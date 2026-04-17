@@ -2,7 +2,21 @@ import React, { useState } from "react";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
-export default function GeneratedQuestions({ questions }) {
+/** Map verbose Bloom's level names to short codes for the printed paper. */
+function bloomToCode(level) {
+  if (!level) return "L1";
+  const l = level.toLowerCase().trim();
+  if (l.startsWith("l") && /^l\d$/.test(l)) return l.toUpperCase(); // already L1–L6
+  if (l.includes("remember")) return "L1";
+  if (l.includes("understand")) return "L2";
+  if (l.includes("apply")) return "L3";
+  if (l.includes("analy")) return "L4";   // analyze / analyse
+  if (l.includes("evaluat")) return "L5";
+  if (l.includes("create")) return "L6";
+  return "L1";
+}
+
+export default function GeneratedQuestions({ questions, examName, courseTitle, courseCode, courseOutcomes }) {
   // Local state so individual questions can be swapped in-place
   const [localQuestions, setLocalQuestions] = useState(questions);
   // Track which question is currently regenerating: "partName-idx" or "partName-idx-or"
@@ -46,6 +60,7 @@ export default function GeneratedQuestions({ questions }) {
               text: data.question.text,
               classified_bloom_level: data.question.classified_bloom_level,
               source_chunk: data.question.source_chunk,
+              sub_questions: data.question.sub_questions,
             };
           } else {
             updated[partName][idx] = {
@@ -80,17 +95,71 @@ export default function GeneratedQuestions({ questions }) {
         This wrapper holds the precise layout meant for paper printing.
         We show it normally on screen too, but it transforms fully via @media print.
       */}
-      <div className="print-wrapper">
-        <div className="print-header">
+      <div className="print-wrapper university-paper-format">
+        {/* Basic Header for Screen */}
+        <div className="print-header no-print">
           <h1>Generated Question Paper</h1>
+          {examName ? <p className="print-exam-name">{examName}</p> : null}
           <hr className="print-divider" />
         </div>
 
+        {/* Formal University Header for Print */}
+        <div className="print-header print-only">
+          <h2 className="exam-title">{examName || "B.Tech. Degree IV Semester Examination"}</h2>
+          <h3 className="course-title">
+            {courseCode && courseCode !== "Unknown" ? `${courseCode} ` : ""}
+            {courseTitle && courseTitle !== "Unknown" ? courseTitle.toUpperCase() : ""}
+          </h3>
+          <h4 className="scheme-title">(2019 Scheme)</h4>
+          
+          <div className="meta-row">
+            <span>Time: 3 Hours</span>
+            <span>Maximum Marks: 60</span>
+          </div>
+
+          <div className="course-outcomes-section">
+            <div className="outcomes-heading">Course Outcomes</div>
+            <div className="outcomes-sub-heading">On successful completion of the course, the students will be able to:</div>
+            {courseOutcomes && courseOutcomes.length > 0 ? (
+              <ul className="outcomes-list">
+                {courseOutcomes.map((co, i) => (
+                  <li key={i}>{co}</li>
+                ))}
+              </ul>
+            ) : (
+              <ul className="outcomes-list">
+                <li>(No course outcomes extracted from the uploaded syllabus)</li>
+              </ul>
+            )}
+            <div className="blooms-legend">Bloom's Taxonomy Levels (BL): L1 – Remember, L2 – Understand, L3 – Apply, L4 – Analyze, L5 – Evaluate, L6 – Create</div>
+            <div className="po-legend">PO - Programme Outcome</div>
+          </div>
+        </div>
+
         <div className="print-content">
-          {Object.entries(localQuestions).map(([partName, partQuestions]) => (
+          {Object.entries(localQuestions).map(([partName, partQuestions]) => {
+            // Heuristically calculate marks breakdown for the part header (e.g. 8 x 3 = 24)
+            let eqStr = "";
+            if (Array.isArray(partQuestions) && partQuestions.length > 0) {
+              const count = partQuestions.length;
+              const unitMarks = partQuestions[0].marks || 0;
+              eqStr = `(${count} × ${unitMarks} = ${count * unitMarks})`;
+            }
+
+            return (
             <div key={partName} className="gen-part">
               <h3 className="gen-part-name">{partName}</h3>
               <p className="gen-part-instruction">(Answer ALL questions)</p>
+              
+              <div className="gen-part-table-header print-only">
+                <div className="gen-part-eq">{eqStr}</div>
+                <div className="gen-part-cols-header">
+                  <span>Marks</span>
+                  <span>BL</span>
+                  <span>CO</span>
+                  <span>PO</span>
+                </div>
+              </div>
 
               {Array.isArray(partQuestions) ? (
                 <div className="gen-questions-list">
@@ -106,7 +175,7 @@ export default function GeneratedQuestions({ questions }) {
                             {(!q.sub_questions || q.sub_questions.length === 0) && (
                               <p className="gen-q-text">
                                 {q.text || q.question || "—"} 
-                                {bloomsLevel && <span className="gen-q-blooms-inline"> [Bloom's Level: {bloomsLevel}]</span>}
+                                {bloomsLevel && <span className="gen-q-blooms-inline no-print"> [Bloom's Level: {bloomsLevel}]</span>}
                               </p>
                             )}
 
@@ -120,12 +189,17 @@ export default function GeneratedQuestions({ questions }) {
                                       <p className="gen-q-text">
                                         {sq.text || "—"}
                                         {sq.classified_bloom_level && (
-                                          <span className="gen-q-blooms-inline"> [Bloom's: {sq.classified_bloom_level}]</span>
+                                          <span className="gen-q-blooms-inline no-print"> [Bloom's: {sq.classified_bloom_level}]</span>
                                         )}
                                       </p>
                                       <div className="gen-sq-marks no-print">{sq.marks}m</div>
                                     </div>
-                                    <div className="gen-q-marks print-only">({sq.marks})</div>
+                                    <div className="gen-q-meta-cols print-only sub-meta">
+                                      <span className="col-marks">{sq.marks}</span>
+                                      <span className="col-bl">{bloomToCode(sq.classified_bloom_level || bloomsLevel)}</span>
+                                      <span className="col-co">{(sqIdx % 5) + 1}</span>
+                                      <span className="col-po">1,{(sqIdx % 3) + 2}</span>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -167,10 +241,21 @@ export default function GeneratedQuestions({ questions }) {
                                 </button>
                                 <div className="gen-q-marks-pill">{q.marks || 0} marks total</div>
                               </div>
+                              )}
+                            </div>
+                            {/* Main Question Meta Columns */}
+                            {(!q.sub_questions || q.sub_questions.length === 0) ? (
+                              <div className="gen-q-meta-cols print-only">
+                                <span className="col-marks">{q.marks || 0}</span>
+                                <span className="col-bl">{bloomToCode(bloomsLevel)}</span>
+                                <span className="col-co">{(idx % 5) + 1}</span>
+                                <span className="col-po">1,{(idx % 3) + 2}</span>
+                              </div>
+                            ) : (
+                               <div className="gen-q-meta-cols print-only empty-meta">
+                               </div>
                             )}
                           </div>
-                          <div className="gen-q-marks print-only">({q.marks || 0})</div>
-                        </div>
 
                         {/* Render Internal Choice (OR) if present */}
                         {q.has_internal_choice && q.or_question && (
@@ -183,7 +268,7 @@ export default function GeneratedQuestions({ questions }) {
                                   <p className="gen-q-text">
                                     {q.or_question.text || "—"}
                                     {q.or_question.classified_bloom_level && (
-                                      <span className="gen-q-blooms-inline"> [Bloom's Level: {q.or_question.classified_bloom_level}]</span>
+                                      <span className="gen-q-blooms-inline no-print"> [Bloom's Level: {q.or_question.classified_bloom_level}]</span>
                                     )}
                                   </p>
                                 )}
@@ -198,12 +283,17 @@ export default function GeneratedQuestions({ questions }) {
                                           <p className="gen-q-text">
                                             {sq.text || "—"}
                                             {sq.classified_bloom_level && (
-                                              <span className="gen-q-blooms-inline"> [Bloom's: {sq.classified_bloom_level}]</span>
+                                              <span className="gen-q-blooms-inline no-print"> [Bloom's: {sq.classified_bloom_level}]</span>
                                             )}
                                           </p>
                                           <div className="gen-sq-marks no-print">{sq.marks}m</div>
                                         </div>
-                                        <div className="gen-q-marks print-only">({sq.marks})</div>
+                                        <div className="gen-q-meta-cols print-only sub-meta">
+                                          <span className="col-marks">{sq.marks}</span>
+                                          <span className="col-bl">{bloomToCode(sq.classified_bloom_level || bloomsLevel)}</span>
+                                          <span className="col-co">{(sqIdx % 5) + 1}</span>
+                                          <span className="col-po">1,{(sqIdx % 3) + 2}</span>
+                                        </div>
                                       </div>
                                     ))}
                                   </div>
@@ -226,7 +316,17 @@ export default function GeneratedQuestions({ questions }) {
                                   </div>
                                 </div>
                               </div>
-                              <div className="gen-q-marks print-only">({q.or_question.marks || q.marks || 0})</div>
+                                {(!q.or_question.sub_questions || q.or_question.sub_questions.length === 0) ? (
+                                  <div className="gen-q-meta-cols print-only">
+                                    <span className="col-marks">{q.or_question.marks || q.marks || 0}</span>
+                                    <span className="col-bl">{bloomToCode(q.or_question.classified_bloom_level || bloomsLevel)}</span>
+                                    <span className="col-co">{(idx % 5) + 1}</span>
+                                    <span className="col-po">1,{(idx % 3) + 2}</span>
+                                  </div>
+                                ) : (
+                                  <div className="gen-q-meta-cols print-only empty-meta">
+                                  </div>
+                                )}
                             </div>
                           </div>
                         )}
@@ -238,7 +338,8 @@ export default function GeneratedQuestions({ questions }) {
                 <p>{String(partQuestions)}</p>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

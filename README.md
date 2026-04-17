@@ -1,118 +1,295 @@
-# Automated Question Paper Generation System (AQPG)
+# AQPG - Automated Question Paper Generation System
 
-AQPG is an AI-powered system that reads university syllabus PDFs and textbook PDFs, semantically maps textbook content to syllabus topics, and mathematically generates a full examination question paper adhering to Bloom's Taxonomy and custom marking patterns.
+AQPG is a local-first AI pipeline that:
 
-## 🚀 System Architecture
+1. Extracts module/topics from a syllabus PDF.
+2. Extracts and chunks content from a textbook PDF.
+3. Semantically maps syllabus topics to textbook chunks.
+4. Generates exam questions from a configurable paper pattern.
+5. Classifies generated questions using Bloom's taxonomy.
 
-This project is fully local to ensure maximum data privacy.
-*   **Frontend:** React.js (Component-based architecture, modern glassmorphic UI)
-*   **Backend:** FastAPI (Python), completely modular following SOLID principles
-*   **AI Models:** 
-    *   **Text/PDF Extraction:** `PyMuPDF`
-    *   **Semantic Mapping:** `sentence-transformers/all-MiniLM-L6-v2` (Local SBERT)
-    *   **Question Generation:** `google/flan-t5-base` (Local LLM)
+The project is designed to run fully on your machine (with Ollama + local/inferred model loading), so textbook/syllabus content does not need to leave your local environment.
 
 ---
 
-## 💻 Prerequisites
+## Documentation Index
 
-Before starting, ensure your machine has the following installed:
-*   **Python 3.9+**
-*   **Node.js 18+** & **npm**
-*   **Git**
+- Deep technical architecture and file-by-file explanation: `docs/developer_guide.md`
+- Additional codebase references: `docs/COMPREHENSIVE_CODEBASE_GUIDE.md`
+- LoRA training notebook/script notes: `train.md`
 
 ---
 
-## 🛠️ Step-by-Step Setup Guide
+## Tech Stack
 
-Follow these instructions to get the application running from A to Z on your local machine.
+### Frontend
+- React (`frontend/`)
 
-### 1. Clone the Repository
+### Backend
+- FastAPI (`backend/`)
+- PDF extraction: PyMuPDF (+ OCR fallback with Tesseract)
+- Semantic mapping: Sentence Transformers (SBERT)
+- Question generation:
+  - Low mark: Flan-T5 path
+  - High mark: Mistral via Ollama (`mistral-pyq` adapter)
+- Bloom classification: DistilBERT pipeline + keyword fallback
+
+---
+
+## 1) Prerequisites
+
+Install these before setup:
+
+- Python 3.10+ recommended
+- Node.js 18+ and npm
+- Git
+- Ollama installed and running
+- Tesseract OCR installed (needed for scanned PDFs)
+- (Windows only) Poppler binaries for `pdf2image`
+
+Optional but recommended:
+- GPU-capable environment for faster local model inference/training
+- `models/` directory with pre-downloaded custom models
+
+---
+
+## 2) Project Structure (Important Paths)
+
+- `backend/` - FastAPI backend
+- `frontend/` - React frontend
+- `processed_data/` - runtime pipeline artifacts (auto-created/updated)
+- `models/` - optional local model directories
+- `Modelfile` - Ollama model adapter recipe used for `mistral-pyq`
+- `pyq_mistral_train.jsonl` - prior question dataset used in high-mark generation support
+
+---
+
+## 3) Local Setup - Backend
+
+From project root:
+
 ```bash
-git clone https://github.com/VINAYAK28x/AQPG.git
-cd AQPG
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r ../requirements.txt
 ```
 
-### 2. Backend Setup (Python Virtual Environment)
-You **must** use a virtual environment to isolate the heavy Machine Learning dependencies.
+On Windows (PowerShell):
 
-1. Navigate to the backend folder:
-   ```bash
-   cd backend
-   ```
-2. Create a virtual environment named `venv`:
-   ```bash
-   # On Mac/Linux
-   python3 -m venv venv
-   
-   # On Windows
-   python -m venv venv
-   ```
-3. Activate the virtual environment:
-   ```bash
-   # On Mac/Linux
-   source venv/bin/activate
-   
-   # On Windows
-   venv\Scripts\activate
-   ```
-4. Install all required dependencies (this may take a few minutes as it downloads PyTorch and Transformers):
-   ```bash
-   pip install -r ../requirements.txt
-   ```
+```powershell
+cd backend
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r ..\requirements.txt
+```
 
-### 3. Machine Learning Models Setup 🧠
-Because AQPG runs 100% locally for data privacy, it relies on open-source HuggingFace models. 
+### Backend Run
 
-**Automatic Download (Recommended):**
-The first time you run the FastAPI backend and trigger Semantic Mapping or Question Generation, the `transformers` library will **automatically download the model weights** (~1.2GB total) from the HuggingFace hub and cache them in your system's default hidden cache folder (e.g., `~/.cache/huggingface/hub/` on Mac/Linux). **You must be connected to the internet the very first time you use the app.**
-
-**Manual/Offline Setup:**
-If you need the system to be completely air-gapped without internet access:
-1. Download `all-MiniLM-L6-v2` and `flan-t5-base` manually on a separate machine.
-2. Place the model folders inside the root `models/` directory.
-3. Update `backend/app/core/config.py` to point to `../models/flan-t5-base`.
-
-### 4. Running the Backend Server
-While inside the `backend` folder with your `venv` activated, start the FastAPI server:
 ```bash
+cd backend
+source venv/bin/activate
 uvicorn main:app --reload --port 8000
 ```
-*The backend is now actively listening on `http://127.0.0.1:8000`.*
 
-### 5. Frontend Setup (React)
-Open a **new terminal window** (leave the backend running in the first one) and navigate to the frontend folder:
+Backend health check:
+
+```bash
+curl http://127.0.0.1:8000/
+```
+
+Expected response:
+
+```json
+{"status":"Backend running successfully"}
+```
+
+---
+
+## 4) Local Setup - Frontend
+
+From project root in a new terminal:
+
 ```bash
 cd frontend
-```
-Install the Node dependencies:
-```bash
 npm install
-```
-Start the React development server:
-```bash
 npm start
 ```
-*The React app will automatically open in your browser at `http://localhost:3000`.*
+
+The UI opens at:
+- `http://localhost:3000`
+
+Frontend talks to:
+- `REACT_APP_API_URL` if set
+- else default backend `http://127.0.0.1:8000`
 
 ---
 
-## 🎓 How to Use the Application (A to Z)
+## 5) Mistral Adapter Setup (Ollama) - Required for Best High-Mark Results
 
-Once both the Frontend and Backend are running, use the UI to generate your exam:
+This repo contains a `Modelfile`:
 
-1. **Step 1: Syllabus Upload**
-   Upload your university's Syllabus PDF. The AI will parse the document and extract the distinct examination headings and modules.
-2. **Step 2: Textbook Upload**
-   Upload the source Textbook PDF (this can be hundreds of pages). `PyMuPDF` will intelligently chunk the paragraphs contextually into manageable blocks.
-3. **Step 3: Semantic Mapping**
-   Click the mapping button. The local SBERT model will mathematically calculate vector embeddings for every syllabus topic and every textbook chunk. It will map the most relevant textbook paragraphs to specific syllabus topics. *(Note: This process takes 10-30 seconds depending on textbook size).*
-4. **Step 4: Pattern Configuration**
-   Define your Exam Name, add Examination Parts (e.g., "PART A", "PART B"), assign standard marks for each section, and select the target Bloom's Taxonomy cognitive level (e.g., "Remember", "Analyze").
-5. **Step 5: Generate Questions**
-   The application will pass the required specifications and the isolated textbook context directly to the local `Flan-T5` model to synthetically generate new exam questions. Once complete, you can review the generated exam paper.
+```text
+FROM mistral
+ADAPTER "models/mistral 1/Mistral-1-F32-LoRA.gguf"
+```
+
+This means AQPG expects an Ollama model named `mistral-pyq` (or equivalent) built by combining:
+- base `mistral` model
+- local LoRA adapter file at `models/mistral 1/Mistral-1-F32-LoRA.gguf`
+
+### 5.1 Ensure Ollama is installed and running
+
+Check:
+
+```bash
+ollama --version
+ollama list
+```
+
+### 5.2 Pull base Mistral model
+
+```bash
+ollama pull mistral
+```
+
+### 5.3 Place adapter file
+
+Put your LoRA GGUF adapter at:
+
+- `models/mistral 1/Mistral-1-F32-LoRA.gguf`
+
+If you use another path/name, update `Modelfile` accordingly.
+
+### 5.4 Build adapter model in Ollama
+
+From project root:
+
+```bash
+ollama create mistral-pyq -f Modelfile
+```
+
+### 5.5 Verify adapter model
+
+```bash
+ollama list
+ollama run mistral-pyq "Write one 12-mark university exam question on operating systems memory management."
+```
+
+If this works, AQPG high-mark generation path can use `mistral-pyq`.
 
 ---
 
-## 🔒 Security & Data Privacy
-Because all data processing (Chunking, Vectorizing, Generation) happens **on your device**, this application is safe for processing proprietary or copyrighted textbooks. No document text is ever sent to OpenAI, Anthropic, or external cloud providers.
+## 6) Model Resolution Behavior in AQPG
+
+Configured in `backend/app/core/config.py`:
+
+- SBERT local path: `models/sbert_custom_model`
+- T5 local path: `models/flan t5 large final`
+- SBERT fallback: `all-MiniLM-L6-v2`
+- T5 fallback: `google/flan-t5-small`
+- Ollama base URL: `http://localhost:11434`
+
+### Important runtime behavior
+
+- If local SBERT/T5 folders do not exist, backend falls back to Hugging Face model names.
+- First fallback run may download weights (internet required once).
+- High-mark path in question service calls Ollama and expects local Ollama service reachable.
+
+---
+
+## 7) Optional: About Training the Mistral LoRA Adapter
+
+`train.md` contains a notebook-style workflow using Unsloth + SFTTrainer to create LoRA adapters.
+
+Typical flow:
+1. Load quantized Mistral instruct model.
+2. Apply LoRA config.
+3. Train on JSONL prompt-completion style data.
+4. Save LoRA adapter.
+5. Export/convert to GGUF adapter format compatible with your Ollama setup.
+6. Reference adapter in `Modelfile`.
+
+Note:
+- Training script in `train.md` is experimental/not productionized as a CLI.
+- Keep training artifacts versioned externally; only publish final adapter intended for inference.
+
+---
+
+## 8) End-to-End Run Sequence (UI)
+
+With backend + frontend + Ollama running:
+
+1. Step 1: Upload syllabus PDF.
+2. Step 2: Upload textbook PDF (optionally with page range).
+3. Step 3: Select topics (auto or manual).
+4. Step 4: Run semantic mapping.
+5. Step 5: Configure question paper pattern.
+6. Step 6: Generate questions and optionally regenerate individual questions.
+
+---
+
+## 9) Runtime Files You Should Expect
+
+Generated under `processed_data/`:
+
+- `syllabus_topics.json`
+- `selected_topics.json` (if topic filtering used)
+- `textbook_chunks.json`
+- `topic_chunk_mapping.json`
+- `question_pattern.json`
+- `generated_questions.json`
+- `images/`
+- `cache/` (embedding cache)
+
+These are crucial for debugging each pipeline stage.
+
+---
+
+## 10) Common Troubleshooting
+
+### Backend starts but generation fails
+- Ensure Ollama is running.
+- Ensure `mistral-pyq` exists in `ollama list`.
+- Check `processed_data/topic_chunk_mapping.json` exists before generation.
+
+### No/poor syllabus topics extracted
+- Validate syllabus PDF text quality.
+- Try a cleaner digital PDF (not scanned image-only).
+- Verify Ollama base model responds.
+
+### No chunks or too few chunks
+- Check textbook extraction quality (scanned docs may need OCR).
+- Verify Tesseract installation.
+- If page range used, confirm range is valid.
+
+### High-mark questions become generic
+- Verify adapter model is actually used (`mistral-pyq` available).
+- Inspect mapping scores and context quality.
+- Improve adapter quality or training data.
+
+### Slow first run
+- Normal when fallback models are downloaded first time.
+- Later runs should be faster due to cache and model warm state.
+
+---
+
+## 11) Development Tips
+
+- Keep backend and frontend in separate terminals.
+- Do not delete `processed_data/` while active requests are running.
+- If behavior looks stale after uploading new files, re-run mapping and generation.
+- Use `docs/developer_guide.md` for deeper internals before making service-level changes.
+
+---
+
+## 12) Security and Privacy Notes
+
+- AQPG is designed for local processing.
+- No mandatory external SaaS API calls are built into the main generation path.
+- Fallback model downloads from Hugging Face may occur when local model folders are missing.
+
+For stricter offline use:
+- Pre-download all required models.
+- Keep Ollama models/adapters local.
+- Block internet after initial setup if needed.

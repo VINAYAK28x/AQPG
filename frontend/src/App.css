@@ -1140,4 +1140,191 @@ input:checked + .switch-slider:before {
     margin: 30px auto 0;
     border-top: 1px dashed #999;
   }
+
+  .university-paper-format { background: white !important; padding: 20px !important; }
+
+  /* ===================================================
+     UNIVERSITY B.TECH PAPER FORMAT (PRINT ONLY)
+     =================================================== */
+
+  .university-paper-format {
+    font-family: 'Times New Roman', Times, serif;
+    color: #000 !important;
+    line-height: 1.4;
+    text-align: justify;
+  }
+  .university-paper-format .print-header {
+    text-align: center;
+    border-bottom: none;
+    margin-bottom: 20px;
+  }
+  .university-paper-format .exam-title {
+    font-size: 16pt;
+    font-style: italic;
+    font-weight: bold;
+    margin-bottom: 6px;
+    background: transparent !important;
+    -webkit-text-fill-color: #000 !important;
+  }
+  .university-paper-format .course-title {
+    font-size: 14pt;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  .university-paper-format .scheme-title {
+    font-size: 12pt;
+    font-style: italic;
+    margin-bottom: 12px;
+    font-weight: normal;
+  }
+  .university-paper-format .meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12pt;
+    margin-bottom: 16px;
+  }
+
+  /* Course Outcomes */
+  .course-outcomes-section {
+    text-align: left;
+    font-size: 11pt;
+    margin-bottom: 24px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #000;
+  }
+  .outcomes-heading {
+    font-size: 12pt;
+    font-weight: bold;
+    text-decoration: underline;
+    margin-bottom: 4px;
+  }
+  .outcomes-sub-heading {
+    margin-bottom: 6px;
+    font-style: italic;
+  }
+  .outcomes-list {
+    list-style: none;
+    padding-left: 10px;
+    margin-bottom: 12px;
+  }
+  .outcomes-list li {
+    margin-bottom: 2px;
+    font-size: 11pt;
+  }
+  .outcomes-list li::before {
+    content: none !important;
+  }
+  .blooms-legend, .po-legend {
+    margin-top: 4px;
+    font-size: 10pt;
+  }
+
+  /* Part Table Header (Marks BL CO PO columns) */
+  .gen-part-table-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 4px;
+    padding-right: 0;
+  }
+  .gen-part-eq {
+    font-size: 12pt;
+    margin-right: auto;
+    padding-left: 40px;
+  }
+  .gen-part-cols-header {
+    display: flex;
+    gap: 8px;
+    width: 260px;
+  }
+  .gen-part-cols-header span {
+    width: 55px;
+    text-align: center;
+    font-size: 11pt;
+    font-weight: bold;
+  }
+
+  /* Per-question meta columns (Marks BL CO PO) */
+  .gen-q-meta-cols {
+    display: flex !important;
+    gap: 8px;
+    width: 260px;
+    flex-shrink: 0;
+  }
+  .gen-q-meta-cols span {
+    width: 55px;
+    text-align: center;
+    font-size: 11pt;
+  }
+  .gen-q-meta-cols.sub-meta {
+    margin-left: auto;
+  }
+  .empty-meta {
+    display: none !important;
+  }
+
+  /* Question row alignment */
+  .university-paper-format .gen-question-row {
+    display: flex;
+    align-items: flex-start;
+    border: none !important;
+    background: transparent !important;
+  }
+  .university-paper-format .gen-q-num {
+    font-size: 12pt;
+    font-weight: normal;
+    color: #000;
+    min-width: 35px;
+    flex-shrink: 0;
+  }
+  .university-paper-format .gen-q-text {
+    font-size: 12pt;
+    color: #000;
+  }
+  .university-paper-format .gen-q-body {
+    flex: 1;
+  }
+  .university-paper-format .gen-part-name {
+    font-size: 14pt;
+    text-align: center;
+    font-weight: bold;
+    color: #000;
+  }
+  .university-paper-format .gen-part-instruction {
+    text-align: center;
+    font-size: 11pt;
+    font-style: italic;
+    margin-bottom: 8px;
+    color: #000;
+  }
+  .university-paper-format .gen-sub-questions {
+    border-left: none;
+    padding-left: 0;
+    margin-left: 0;
+  }
+  .university-paper-format .gen-sq-label {
+    font-size: 12pt;
+    font-weight: normal;
+    color: #000;
+  }
+
+  /* OR divider — plain black, no color */
+  .university-paper-format .gen-or-divider {
+    text-align: center;
+    font-weight: bold;
+    margin: 10px 0;
+    font-size: 12pt;
+    color: #000 !important;
+    background: transparent !important;
+    border: none !important;
+  }
+  .university-paper-format .gen-question-or-block {
+    background: transparent !important;
+    border: none !important;
+  }
+} /* end @media print */
+
+/* Hide print-only elements on screen by default */
+.print-only {
+  display: none;
 }
+

@@ -59,7 +59,7 @@ BLOOM_KEYWORDS = {
 
 # Auto-discover the model path relative to the project root
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent  # backend -> AQPG
-_DEFAULT_MODEL_PATH = _PROJECT_ROOT / "models" / "blooms_classifier" / "kaggle" / "working" / "blooms_classifier"
+_DEFAULT_MODEL_PATH = _PROJECT_ROOT / "models" / "bloom_classifier" / "kaggle" / "working" / "blooms_classifier"
 
 
 class BloomClassifierService:

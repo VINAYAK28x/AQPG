@@ -32,6 +32,11 @@ FLAN_T5_MODEL_PATH = str(PROJECT_ROOT / "models" / "flan t5 large final")
 SBERT_FALLBACK_MODEL = "all-MiniLM-L6-v2"
 FLAN_T5_FALLBACK_MODEL = "google/flan-t5-small"
 
+# Semantic Syllabus Extractor (Local Mistral via Ollama)
+OLLAMA_BASE_URL = "http://localhost:11434"
+LLM_MODEL = "mistral"
+
+
 # --------------------------------------------------
 # SBERT MAPPING SETTINGS
 # --------------------------------------------------
@@ -41,11 +46,12 @@ DIVERSITY_THRESHOLD = 0.85
 MAX_CHUNKS_PER_TOPIC = 6
 
 # --------------------------------------------------
-# CHUNKING SETTINGS
+# CHUNKING SETTINGS (character-based for RecursiveCharacterTextSplitter)
 # --------------------------------------------------
 
-CHUNK_SIZE_WORDS = 200
-MIN_CHUNK_LENGTH = 50
+CHUNK_SIZE_CHARS = 2000
+CHUNK_OVERLAP_CHARS = 300
+MIN_CHUNK_LENGTH = 300
 
 # --------------------------------------------------
 # CORS SETTINGS

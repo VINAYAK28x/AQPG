@@ -5,6 +5,7 @@ import Stepper           from "./components/Stepper";
 import SyllabusUpload    from "./components/SyllabusUpload";
 import TextbookUpload    from "./components/TextbookUpload";
 import SemanticMapping   from "./components/SemanticMapping";
+import TopicSelection    from "./components/TopicSelection";
 import PatternConfig     from "./components/PatternConfig";
 import GeneratedQuestions from "./components/GeneratedQuestions";
 
@@ -14,9 +15,10 @@ export default function App() {
   /* ---- Step management ---- */
   const [step, setStep] = useState(1);
 
-  /* ---- Syllabus ---- */
+  /* ---- Syllabus & Topic Selection ---- */
   const [topics, setTopics]             = useState(null);
   const [syllabusLoading, setSyllabusLoading] = useState(false);
+  const [selectedTopics, setSelectedTopics]   = useState({});
 
   /* ---- Textbook ---- */
   const [chunkCount, setChunkCount]     = useState(0);
@@ -25,7 +27,7 @@ export default function App() {
   const [pagesProcessed, setPagesProcessed]   = useState(0);
 
   /* ---- Pattern ---- */
-  const [examName, setExamName]         = useState("");
+  const [examName, setExamName]         = useState("BTech Degree Computer Science Examination");
   const [parts, setParts]               = useState(defaultPattern());
   const [expandedParts, setExpandedParts] = useState([0, 1]);
   const [patternLoading, setPatternLoading] = useState(false);
@@ -109,7 +111,7 @@ export default function App() {
         setGenerationError(data.error); 
       } else { 
         setGeneratedQuestions(data.questions || {}); 
-        setStep(5); // Transition to the generated questions step
+        setStep(6); // Transition to the generated questions step
       }
     } catch (err) { setGenerationError("Error: " + err.message); }
     setGenerationLoading(false);
@@ -150,10 +152,22 @@ export default function App() {
         )}
 
         {step === 3 && (
-          <SemanticMapping onNext={() => setStep(4)} />
+          <TopicSelection
+            topics={topics}
+            selectedTopics={selectedTopics}
+            setSelectedTopics={setSelectedTopics}
+            onNext={() => setStep(4)}
+          />
         )}
 
         {step === 4 && (
+          <SemanticMapping 
+            selectedTopics={selectedTopics}
+            onNext={() => setStep(5)} 
+          />
+        )}
+
+        {step === 5 && (
           <PatternConfig
             examName={examName} setExamName={setExamName}
             parts={parts} setParts={setParts}
@@ -167,8 +181,14 @@ export default function App() {
           />
         )}
 
-        {step === 5 && (
-          <GeneratedQuestions questions={generatedQuestions} />
+        {step === 6 && (
+          <GeneratedQuestions 
+            questions={generatedQuestions} 
+            examName={examName} 
+            courseTitle={topics?.course_title}
+            courseCode={topics?.course_code}
+            courseOutcomes={topics?.course_outcomes}
+          />
         )}
       </main>
     </div>
@@ -178,12 +198,25 @@ export default function App() {
 /* Default pattern factory (8x3M Part A, 4x12M OR Part B) */
 function defaultPattern() {
   const defaultModules = ["Module I", "Module II", "Module III", "Module IV"];
-  const getMod = (i) => defaultModules[i % 4]; // Distribute roughly across first 4 modules
+  const getMod = (i) => defaultModules[i % 4]; // Distribute roughly across first 4 modules (used for Part B)
+
+  // Required default Part A order:
+  // Q1-Q2: Module I, Q3-Q4: Module II, Q5-Q6: Module III, Q7-Q8: Module IV
+  const partA_modules = [
+    "Module I",
+    "Module I",
+    "Module II",
+    "Module II",
+    "Module III",
+    "Module III",
+    "Module IV",
+    "Module IV",
+  ];
 
   const partA_questions = Array.from({ length: 8 }).map((_, i) => ({
     question_no: i + 1,
     marks: 3,
-    module: getMod(i),
+    module: partA_modules[i],
     has_internal_choice: false,
     sub_questions: null
   }));

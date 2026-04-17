@@ -3,9 +3,10 @@ import React from "react";
 const STEPS = [
   { num: 1, label: "Upload Syllabus" },
   { num: 2, label: "Upload Textbook" },
-  { num: 3, label: "Semantic Mapping" },
-  { num: 4, label: "Configure Pattern" },
-  { num: 5, label: "Generate Questions" },
+  { num: 3, label: "Select Topics" },
+  { num: 4, label: "Semantic Mapping" },
+  { num: 5, label: "Configure Pattern" },
+  { num: 6, label: "Generate Questions" },
 ];
 
 export default function Stepper({ currentStep, onStepClick }) {

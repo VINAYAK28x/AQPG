@@ -67,6 +67,9 @@ async def generate_questions(pattern: ExamPattern):
                 all_q_texts.append(q.get("text", ""))
                 if "or_question" in q:
                     all_q_texts.append(q["or_question"].get("text", ""))
+                    if "sub_questions" in q["or_question"] and q["or_question"]["sub_questions"]:
+                        for sq in q["or_question"]["sub_questions"]:
+                            all_q_texts.append(sq.get("text", ""))
                 if "sub_questions" in q and q["sub_questions"]:
                     for sq in q["sub_questions"]:
                         all_q_texts.append(sq.get("text", ""))
@@ -83,6 +86,10 @@ async def generate_questions(pattern: ExamPattern):
                 if "or_question" in q:
                     q["or_question"]["classified_bloom_level"] = all_levels[level_idx]
                     level_idx += 1
+                    if "sub_questions" in q["or_question"] and q["or_question"]["sub_questions"]:
+                        for sq in q["or_question"]["sub_questions"]:
+                            sq["classified_bloom_level"] = all_levels[level_idx]
+                            level_idx += 1
                 if "sub_questions" in q and q["sub_questions"]:
                     for sq in q["sub_questions"]:
                         sq["classified_bloom_level"] = all_levels[level_idx]
@@ -137,8 +144,12 @@ async def regenerate_question(req: RegenerateRequest):
         chunks_dict = question_service._chunks_dict_cache or {}
 
         syllabus_topics = question_service._load_json(
-            os.path.join(processed, "syllabus_topics.json")
-        ) or {}
+            os.path.join(processed, "selected_topics.json")
+        )
+        if not syllabus_topics:
+            syllabus_topics = question_service._load_json(
+                os.path.join(processed, "syllabus_topics.json")
+            ) or {}
 
         question_service._load_model()
 
@@ -197,4 +208,3 @@ async def regenerate_question(req: RegenerateRequest):
             "error": str(e),
             "message": "Question regeneration failed.",
         }
-

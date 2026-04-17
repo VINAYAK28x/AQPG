@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
-export default function SemanticMapping({ onNext }) {
+export default function SemanticMapping({ selectedTopics, onNext }) {
   const [loading, setLoading] = useState(false);
   const [mapping, setMapping] = useState(null);
   const [error, setError] = useState(null);
@@ -21,8 +21,14 @@ export default function SemanticMapping({ onNext }) {
     setError(null);
 
     try {
+      const payload = Object.keys(selectedTopics || {}).length > 0 
+        ? { selected_modules: selectedTopics } 
+        : {};
+
       const response = await fetch(`${API_BASE_URL}/semantic-mapping`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
 
@@ -41,12 +47,25 @@ export default function SemanticMapping({ onNext }) {
   // Module-based mapping: each key is a module name,
   // value has { topics, raw_text, embedding_ready_text, chunks }
   const moduleCount = mapping ? Object.keys(mapping).length : 0;
+  
   const totalChunks = mapping
     ? Object.values(mapping).reduce((sum, mod) => {
+        // Handle new nested topic_mappings structure
+        if (mod.topic_mappings) {
+          const chunkSet = new Set();
+          Object.values(mod.topic_mappings).forEach((chunksList) => {
+            if (Array.isArray(chunksList)) {
+              chunksList.forEach(c => chunkSet.add(c.chunk_id));
+            }
+          });
+          return sum + chunkSet.size;
+        }
+        // Fallback for legacy format
         const chunks = mod.chunks || mod;
         return sum + (Array.isArray(chunks) ? chunks.length : 0);
       }, 0)
     : 0;
+
   const totalTopics = mapping
     ? Object.values(mapping).reduce((sum, mod) => {
         const topics = mod.topics || [];
@@ -93,10 +112,31 @@ export default function SemanticMapping({ onNext }) {
 
           <div className="mapping-results">
             {Object.entries(mapping).map(([moduleName, moduleData]) => {
-              const chunks = moduleData.chunks || [];
-              const topics = moduleData.topics || [];
+              // Extract unique chunks from nested topic_mappings
+              let extractedChunks = [];
+              if (moduleData.topic_mappings) {
+                const uniqueChunksMap = new Map();
+                for (const chunkList of Object.values(moduleData.topic_mappings)) {
+                  if (Array.isArray(chunkList)) {
+                    for (const chunk of chunkList) {
+                      if (!uniqueChunksMap.has(chunk.chunk_id) || chunk.score > uniqueChunksMap.get(chunk.chunk_id).score) {
+                        uniqueChunksMap.set(chunk.chunk_id, chunk);
+                      }
+                    }
+                  }
+                }
+                extractedChunks = Array.from(uniqueChunksMap.values());
+              } else {
+                extractedChunks = moduleData.chunks || [];
+              }
+              
               const isExpanded = expandedModules.includes(moduleName);
+              const topics = moduleData.topics || [];
               const visibleTopics = isExpanded ? topics : topics.slice(0, 5);
+              
+              // Only show top 8 chunks initially, or all if expanded
+              const sortedChunks = extractedChunks.sort((a,b) => b.score - a.score);
+              const visibleChunks = isExpanded ? sortedChunks : sortedChunks.slice(0, 8);
 
               return (
                 <div key={moduleName} className="mapping-item">
@@ -118,12 +158,15 @@ export default function SemanticMapping({ onNext }) {
                     </div>
                   )}
                   <div className="mapping-chunks">
-                    {chunks.map((chunk, idx) => (
+                    {visibleChunks.map((chunk, idx) => (
                       <span key={idx} className="chunk-tag">
                         Chunk #{chunk.chunk_id}{" "}
                         <small>({(chunk.score * 100).toFixed(0)}%)</small>
                       </span>
                     ))}
+                    {!isExpanded && sortedChunks.length > 8 && (
+                      <span className="chunk-tag dim">+{sortedChunks.length - 8} more...</span>
+                    )}
                   </div>
                 </div>
               );

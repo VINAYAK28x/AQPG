@@ -83,3 +83,6 @@ ehthumbs_vista.db
 .classpath
 .settings/
 .cproject
+
+# Build Tools
+llama.cpp/
